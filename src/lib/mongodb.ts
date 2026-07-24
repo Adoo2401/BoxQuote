@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI =
-  process.env.MONGODB_URI ??
-  'mongodb+srv://abdullahrehmani230_db_user:xjGdyNUBPkgU9iW7@cluster0.iexjzyn.mongodb.net/boxquote?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI as string;
+
+if (!MONGODB_URI) {
+  throw new Error('请在 .env.local 中配置 MONGODB_URI');
+}
 
 interface Cache {
   conn: typeof mongoose | null;
