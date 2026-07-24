@@ -2,22 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { SavedQuote } from '@/lib/types';
 import { fmt } from '@/lib/calculations';
 
-function getFontSrc(request: NextRequest): string {
-  // Node.js/Vercel: use file path
+async function getFontBuffer(): Promise<Buffer> {
+  // Node.js / Vercel: read from disk
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path') as typeof import('path');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs') as typeof import('fs');
     const p = path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf');
-    fs.accessSync(p);
-    return p;
-  } catch {
-    // Cloudflare: fetch from own origin
-    const host = request.headers.get('host') ?? 'localhost:3000';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    return `${protocol}://${host}/fonts/NotoSansSC-Bold.ttf`;
-  }
+    return fs.readFileSync(p);
+  } catch {}
+
+  // Cloudflare: read via ASSETS binding to avoid self-fetch 404
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCloudflareContext } = require('@opennextjs/cloudflare') as typeof import('@opennextjs/cloudflare');
+    const { env } = getCloudflareContext();
+    const resp = await (env as Record<string, { fetch: (r: Request) => Promise<Response> }>).ASSETS
+      .fetch(new Request('http://localhost/fonts/NotoSansSC-Bold.ttf'));
+    if (resp.ok) return Buffer.from(await resp.arrayBuffer());
+  } catch {}
+
+  throw new Error('Font file not found');
 }
 
 export async function POST(request: NextRequest) {
@@ -33,8 +39,10 @@ export async function POST(request: NextRequest) {
     const pdfmake = require('pdfmake/js/index.js') as any;
     pdfmake.setLocalAccessPolicy(() => true);
     pdfmake.setUrlAccessPolicy(() => true);
-    const fontSrc = getFontSrc(request);
-    pdfmake.addFonts({ NotoSC: { normal: fontSrc, bold: fontSrc } });
+    const fontBuf = await getFontBuffer();
+    const FONT_KEY = 'NotoSansSC-Bold.ttf';
+    pdfmake.virtualfs.writeFileSync(FONT_KEY, fontBuf);
+    pdfmake.addFonts({ NotoSC: { normal: FONT_KEY, bold: FONT_KEY } });
 
     const { form, calc, settings, quoteNumber, createdAt } = quote;
     const date = new Date(createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
