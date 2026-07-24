@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { SavedQuote } from '@/lib/types';
 import { fmt } from '@/lib/calculations';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfmake = require('pdfmake/js/index.js') as any;
-pdfmake.setLocalAccessPolicy(() => true);
-pdfmake.setUrlAccessPolicy(() => true);
-
 function getFontSrc(request: NextRequest): string {
   // Node.js/Vercel: use file path
   try {
@@ -34,6 +29,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfmake = require('pdfmake/js/index.js') as any;
+    pdfmake.setLocalAccessPolicy(() => true);
+    pdfmake.setUrlAccessPolicy(() => true);
     const fontSrc = getFontSrc(request);
     pdfmake.addFonts({ NotoSC: { normal: fontSrc, bold: fontSrc } });
 
