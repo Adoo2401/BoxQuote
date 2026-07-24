@@ -16,7 +16,9 @@ export async function downloadQuotePDF(quote: SavedQuote): Promise<void> {
     throw new Error(msg);
   }
 
-  const blob = await res.blob();
+  const { pdf } = await res.json();
+  const bytes = Uint8Array.from(atob(pdf), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -24,5 +26,5 @@ export async function downloadQuotePDF(quote: SavedQuote): Promise<void> {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

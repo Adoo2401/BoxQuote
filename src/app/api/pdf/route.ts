@@ -191,13 +191,7 @@ export async function POST(request: NextRequest) {
 
     const doc = pdfmake.createPdf(docDef);
     const buffer: Buffer = await doc.getBuffer();
-
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${quote.quoteNumber}.pdf"`,
-      },
-    });
+    return NextResponse.json({ pdf: buffer.toString('base64') });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('PDF render error:', e);
