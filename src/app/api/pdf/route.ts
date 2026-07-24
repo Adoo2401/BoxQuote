@@ -2,29 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { SavedQuote } from '@/lib/types';
 import { fmt } from '@/lib/calculations';
 
-// Cache font in module scope so it's only fetched once per Worker instance
-let fontCache: Buffer | null = null;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfmake = require('pdfmake/js/index.js') as any;
+pdfmake.setLocalAccessPolicy(() => true);
+pdfmake.setUrlAccessPolicy(() => true);
 
-async function getFont(request: NextRequest): Promise<Buffer> {
-  if (fontCache) return fontCache;
-
-  // Try file system first (Node.js/Vercel), fall back to URL (Cloudflare)
+function getFontSrc(request: NextRequest): string {
+  // Node.js/Vercel: use file path
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('fs') as typeof import('fs');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path') as typeof import('path');
-    const filePath = path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf');
-    fontCache = fs.readFileSync(filePath);
-    return fontCache;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    const p = path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf');
+    fs.accessSync(p);
+    return p;
   } catch {
     // Cloudflare: fetch from own origin
     const host = request.headers.get('host') ?? 'localhost:3000';
     const protocol = host.includes('localhost') ? 'http' : 'https';
-    const url = `${protocol}://${host}/fonts/NotoSansSC-Bold.ttf`;
-    const res = await fetch(url);
-    fontCache = Buffer.from(await res.arrayBuffer());
-    return fontCache;
+    return `${protocol}://${host}/fonts/NotoSansSC-Bold.ttf`;
   }
 }
 
@@ -37,11 +34,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const font = await getFont(request);
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { default: PdfPrinter } = require('pdfmake/js/Printer') as any;
-    const printer = new PdfPrinter({ NotoSC: { normal: font, bold: font } });
+    const fontSrc = getFontSrc(request);
+    pdfmake.addFonts({ NotoSC: { normal: fontSrc, bold: fontSrc } });
 
     const { form, calc, settings, quoteNumber, createdAt } = quote;
     const date = new Date(createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -56,7 +50,7 @@ export async function POST(request: NextRequest) {
     const docDef = {
       defaultStyle: { font: 'NotoSC', fontSize: 11, color: SLATE },
       pageSize: 'A4',
-      pageMargins: [44, 44, 44, 60],
+      pageMargins: [44, 44, 44, 60] as [number, number, number, number],
       content: [
         // Header
         {
@@ -130,12 +124,10 @@ export async function POST(request: NextRequest) {
           table: {
             widths: ['*', 'auto'],
             body: [
-              // Header row
               [
                 { text: '项目', bold: true, color: '#ffffff', fillColor: ROSE, border: [false, false, false, false], margin: [8, 8, 8, 8] },
                 { text: '金额', bold: true, color: '#ffffff', fillColor: ROSE, alignment: 'right', border: [false, false, false, false], margin: [8, 8, 8, 8] },
               ],
-              // Data rows
               ...[
                 [`原材料费用（¥${calc.effectiveMaterialUnitPrice}/dm² × ${form.quantity.toLocaleString()} 件）`, `¥${fmt(calc.materialCostTotal)}`],
                 ...(calc.materialMarkupAmount > 0 ? [[`材料加价（${form.materialMarkupPct}%）`, `¥${fmt(calc.materialMarkupAmount)}`]] : []),
@@ -145,12 +137,10 @@ export async function POST(request: NextRequest) {
                 { text: row[0], color: GREY, fillColor: i % 2 === 1 ? LIGHT : undefined, border: [false, false, false, true], borderColor: ['', '', '', '#e2e8f0'], margin: [8, 8, 8, 8] },
                 { text: row[1], bold: true, alignment: 'right', fillColor: i % 2 === 1 ? LIGHT : undefined, border: [false, false, false, true], borderColor: ['', '', '', '#e2e8f0'], margin: [8, 8, 8, 8] },
               ]),
-              // Total
               [
                 { text: '合　计', bold: true, fontSize: 13, color: '#ffffff', fillColor: ROSE, border: [false, false, false, false], margin: [8, 10, 8, 10] },
                 { text: `¥${fmt(calc.grandTotal)}`, bold: true, fontSize: 13, color: '#ffffff', fillColor: ROSE, alignment: 'right', border: [false, false, false, false], margin: [8, 10, 8, 10] },
               ],
-              // Unit price
               [
                 { text: '单价', bold: true, color: ROSE, fillColor: '#fff1f2', border: [false, false, false, false], margin: [8, 8, 8, 8] },
                 { text: `¥${fmt(calc.unitPrice)} / 件`, bold: true, color: ROSE, fillColor: '#fff1f2', alignment: 'right', border: [false, false, false, false], margin: [8, 8, 8, 8] },
@@ -160,19 +150,16 @@ export async function POST(request: NextRequest) {
           margin: [0, 0, 0, 16],
         },
 
-        // Notes
         ...(form.notes ? [
           { text: '备注', fontSize: 8, bold: true, color: GREY, margin: [0, 0, 0, 6] },
           { text: form.notes, fontSize: 10, color: GREY, margin: [0, 0, 0, 16] },
         ] : []),
 
-        // Payment terms
         ...(settings.paymentTerms ? [
           { text: '付款条款', fontSize: 8, bold: true, color: GREY, margin: [0, 0, 0, 6] },
           { text: settings.paymentTerms, fontSize: 9, color: GREY, margin: [0, 0, 0, 16] },
         ] : []),
 
-        // Signatures
         { text: '', margin: [0, 20, 0, 0] },
         {
           columns: [
@@ -202,16 +189,9 @@ export async function POST(request: NextRequest) {
       }),
     };
 
-    const pdfDoc = printer.createPdfKitDocument(docDef);
-    const chunks: Buffer[] = [];
-    await new Promise<void>((resolve, reject) => {
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', resolve);
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
-    });
+    const doc = pdfmake.createPdf(docDef);
+    const buffer: Buffer = await doc.getBuffer();
 
-    const buffer = Buffer.concat(chunks);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
