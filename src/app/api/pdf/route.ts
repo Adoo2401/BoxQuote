@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { renderToBuffer, Font, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
 import React from 'react';
-import path from 'path';
 import { QuotePDFDocument } from '@/components/QuotePDFDocument';
 import type { SavedQuote } from '@/lib/types';
 
-// Register fonts once at module level — fonts are local files, always available
+// File path works on Node.js (Vercel/local). On Cloudflare, set NEXT_PUBLIC_APP_URL env var.
+const fontSrc = (() => {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return `${process.env.NEXT_PUBLIC_APP_URL}/fonts/NotoSansSC-Bold.ttf`;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    return path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf');
+  } catch {
+    return `http://localhost:3000/fonts/NotoSansSC-Bold.ttf`;
+  }
+})();
+
 Font.register({
   family: 'NotoSC',
   fonts: [
-    { src: path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf'), fontWeight: 'normal' },
-    { src: path.join(process.cwd(), 'public/fonts/NotoSansSC-Bold.ttf'), fontWeight: 'bold' },
+    { src: fontSrc, fontWeight: 'normal' },
+    { src: fontSrc, fontWeight: 'bold' },
   ],
 });
 
