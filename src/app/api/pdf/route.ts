@@ -40,14 +40,8 @@ export async function POST(request: NextRequest) {
     const font = await getFont(request);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const PdfPrinter = require('pdfmake/build/pdfmake') as any;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfMake = require('pdfmake/build/pdfmake') as any;
-
-    // Use server-side PdfPrinter
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const PdfPrinterServer = require('pdfmake') as any;
-    const printer = new PdfPrinterServer({ NotoSC: { normal: font, bold: font } });
+    const { default: PdfPrinter } = require('pdfmake/js/Printer') as any;
+    const printer = new PdfPrinter({ NotoSC: { normal: font, bold: font } });
 
     const { form, calc, settings, quoteNumber, createdAt } = quote;
     const date = new Date(createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
